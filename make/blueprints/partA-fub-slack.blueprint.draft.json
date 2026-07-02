@@ -1,0 +1,393 @@
+{
+  "name": "AHB — Part A: FUB stage → Slack (DRAFT)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "follow-up-boss:watchContactStageUpdated",
+      "version": 1,
+      "parameters": {
+        "__IMTCONN__": "REPLACE_FUB_CONNECTION",
+        "limit": 2
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "builtin:BasicRouter",
+      "version": 1,
+      "mapper": null,
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        }
+      },
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 3,
+              "module": "slack:CreateMessage",
+              "version": 1,
+              "parameters": {
+                "__IMTCONN__": "REPLACE_SLACK_CONNECTION"
+              },
+              "mapper": {
+                "channel": "switch({{2.assignedTo}}; \"Reyes Rivero\"; \"C0PORTFOL08\"; \"Flora Stefoni\"; \"C0PORTFOL09\"; \"Marco Diaz\"; \"C0PORTFOL10\"; \"C0PORTFOL07\")",
+                "text": "*:telephone_receiver: PREQUALIFIED LEAD ASSIGNED TO YOU*\n*Seller Name:* {{seller_name}}\n*Address:* {{address}}\n*Source:* {{source}}\n*Lead Manager:* {{lead_manager}}\n*FUB Link:* <{{fub_link}}|Open in FUB>",
+                "blocks": "{\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*:telephone_receiver: PREQUALIFIED LEAD ASSIGNED TO YOU*\"}},{\"type\":\"section\",\"fields\":[{\"type\":\"mrkdwn\",\"text\":\"*Seller Name:*\\n{{seller_name}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Address:*\\n{{address}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Source:*\\n{{source}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Lead Manager:*\\n{{lead_manager}}\"}]},{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*FUB Link:* <{{fub_link}}|Open in FUB>\"}}]}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 360
+                }
+              },
+              "filter": {
+                "name": "Pending Closer Contact (needs Assigned To; if empty → catch-all route)",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{stage}}",
+                      "o": "text:equal:ci",
+                      "b": "Pending Closer Contact"
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 4,
+              "module": "slack:CreateMessage",
+              "version": 1,
+              "parameters": {
+                "__IMTCONN__": "REPLACE_SLACK_CONNECTION"
+              },
+              "mapper": {
+                "channel": "C0PORTFOL12",
+                "text": "*UNDERWRITING REQUEST*\n*Seller Name:* {{seller_name}}\n*Closer:* {{closer}}\n*Address:* {{address}}\n*Source:* {{source}}\n*FUB Link:* <{{fub_link}}|Open in FUB>",
+                "blocks": "{\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*UNDERWRITING REQUEST*\"}},{\"type\":\"section\",\"fields\":[{\"type\":\"mrkdwn\",\"text\":\"*Seller Name:*\\n{{seller_name}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Closer:*\\n{{closer}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Address:*\\n{{address}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Source:*\\n{{source}}\"}]},{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*FUB Link:* <{{fub_link}}|Open in FUB>\"}}]}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 480
+                }
+              },
+              "filter": {
+                "name": "Needs Underwriting",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{stage}}",
+                      "o": "text:equal:ci",
+                      "b": "Needs Underwriting"
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 5,
+              "module": "slack:CreateMessage",
+              "version": 1,
+              "parameters": {
+                "__IMTCONN__": "REPLACE_SLACK_CONNECTION"
+              },
+              "mapper": {
+                "channel": "switch({{2.assignedTo}}; \"Reyes Rivero\"; \"C0PORTFOL08\"; \"Flora Stefoni\"; \"C0PORTFOL09\"; \"Marco Diaz\"; \"C0PORTFOL10\"; \"C0PORTFOL07\")",
+                "text": "*OFFER PROVIDED BY UW!*\n*Seller Name:* {{seller_name}}\n*Closer:* {{closer}}\n*Address:* {{address}}\n*Source:* {{source}}\n*FUB Link:* <{{fub_link}}|Open in FUB>",
+                "blocks": "{\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*OFFER PROVIDED BY UW!*\"}},{\"type\":\"section\",\"fields\":[{\"type\":\"mrkdwn\",\"text\":\"*Seller Name:*\\n{{seller_name}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Closer:*\\n{{closer}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Address:*\\n{{address}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Source:*\\n{{source}}\"}]},{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*FUB Link:* <{{fub_link}}|Open in FUB>\"}}]}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 600
+                }
+              },
+              "filter": {
+                "name": "Closer Needs To Make Offer (needs Assigned To; if empty → catch-all route)",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{stage}}",
+                      "o": "text:equal:ci",
+                      "b": "Closer Needs To Make Offer"
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 6,
+              "module": "slack:CreateMessage",
+              "version": 1,
+              "parameters": {
+                "__IMTCONN__": "REPLACE_SLACK_CONNECTION"
+              },
+              "mapper": {
+                "channel": "C0PORTFOL13",
+                "text": "*:envelope_with_arrow: OFFER MADE*\n*Closer:* {{closer}}\n*Seller Name:* {{seller_name}}\n*Address:* {{address}}\n*FUB Link:* <{{fub_link}}|Open in FUB>",
+                "blocks": "{\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*:envelope_with_arrow: OFFER MADE*\"}},{\"type\":\"section\",\"fields\":[{\"type\":\"mrkdwn\",\"text\":\"*Closer:*\\n{{closer}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Seller Name:*\\n{{seller_name}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Address:*\\n{{address}}\"}]},{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*FUB Link:* <{{fub_link}}|Open in FUB>\"}}]}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 720
+                }
+              },
+              "filter": {
+                "name": "Offer Submitted - Waiting to Hear Back",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{stage}}",
+                      "o": "text:equal:ci",
+                      "b": "Offer Submitted - Waiting to Hear Back"
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 7,
+              "module": "slack:CreateMessage",
+              "version": 1,
+              "parameters": {
+                "__IMTCONN__": "REPLACE_SLACK_CONNECTION"
+              },
+              "mapper": {
+                "channel": "C0PORTFOL13",
+                "text": "*OFFER REJECTED*\n*Closer:* {{closer}}\n*Seller Name:* {{seller_name}}\n*Address:* {{address}}\n*FUB Link:* <{{fub_link}}|Open in FUB>",
+                "blocks": "{\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*OFFER REJECTED*\"}},{\"type\":\"section\",\"fields\":[{\"type\":\"mrkdwn\",\"text\":\"*Closer:*\\n{{closer}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Seller Name:*\\n{{seller_name}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Address:*\\n{{address}}\"}]},{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*FUB Link:* <{{fub_link}}|Open in FUB>\"}}]}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 840
+                }
+              },
+              "filter": {
+                "name": "Offer Rejected - Future Follow Up",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{stage}}",
+                      "o": "text:equal:ci",
+                      "b": "Offer Rejected - Future Follow Up"
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 8,
+              "module": "slack:CreateMessage",
+              "version": 1,
+              "parameters": {
+                "__IMTCONN__": "REPLACE_SLACK_CONNECTION"
+              },
+              "mapper": {
+                "channel": "C0PORTFOL14",
+                "text": "*:memo: CONTRACT REQUEST*\n*Seller Name:* {{seller_name}}\n*Closer:* {{closer}}\n*Address:* {{address}}\n*FUB Link:* <{{fub_link}}|Open in FUB>",
+                "blocks": "{\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*:memo: CONTRACT REQUEST*\"}},{\"type\":\"section\",\"fields\":[{\"type\":\"mrkdwn\",\"text\":\"*Seller Name:*\\n{{seller_name}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Closer:*\\n{{closer}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Address:*\\n{{address}}\"}]},{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*FUB Link:* <{{fub_link}}|Open in FUB>\"}}]}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 960
+                }
+              },
+              "filter": {
+                "name": "Needs Contract (Automatically Requested To TC)",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{stage}}",
+                      "o": "text:equal:ci",
+                      "b": "Needs Contract (Automatically Requested To TC)"
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 9,
+              "module": "slack:CreateMessage",
+              "version": 1,
+              "parameters": {
+                "__IMTCONN__": "REPLACE_SLACK_CONNECTION"
+              },
+              "mapper": {
+                "channel": "C0PORTFOL13",
+                "text": "*:white_check_mark: CONTRACT SENT*\n*Seller Name:* {{seller_name}}\n*Closer:* {{closer}}\n*Address:* {{address}}\n*FUB Link:* <{{fub_link}}|Open in FUB>",
+                "blocks": "{\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*:white_check_mark: CONTRACT SENT*\"}},{\"type\":\"section\",\"fields\":[{\"type\":\"mrkdwn\",\"text\":\"*Seller Name:*\\n{{seller_name}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Closer:*\\n{{closer}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Address:*\\n{{address}}\"}]},{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*FUB Link:* <{{fub_link}}|Open in FUB>\"}}]}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 1080
+                }
+              },
+              "filter": {
+                "name": "Contract Sent",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{stage}}",
+                      "o": "text:equal:ci",
+                      "b": "Contract Sent"
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 10,
+              "module": "slack:CreateMessage",
+              "version": 1,
+              "parameters": {
+                "__IMTCONN__": "REPLACE_SLACK_CONNECTION"
+              },
+              "mapper": {
+                "channel": "C0PORTFOL15",
+                "text": "*NEW DEAL UNDER CONTRACT!*\n*Seller Name:* {{seller_name}}\n*Closer:* {{closer}}\n*Address:* {{address}}\n*Source:* {{source}}\n*FUB Link:* <{{fub_link}}|Open in FUB>",
+                "blocks": "{\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*NEW DEAL UNDER CONTRACT!*\"}},{\"type\":\"section\",\"fields\":[{\"type\":\"mrkdwn\",\"text\":\"*Seller Name:*\\n{{seller_name}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Closer:*\\n{{closer}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Address:*\\n{{address}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Source:*\\n{{source}}\"}]},{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*FUB Link:* <{{fub_link}}|Open in FUB>\"}}]}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 1200
+                }
+              },
+              "filter": {
+                "name": "Under Contract",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{stage}}",
+                      "o": "text:equal:ci",
+                      "b": "Under Contract"
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 11,
+              "module": "slack:CreateMessage",
+              "version": 1,
+              "parameters": {
+                "__IMTCONN__": "REPLACE_SLACK_CONNECTION"
+              },
+              "mapper": {
+                "channel": "C0PORTFOL06",
+                "text": "*:tada: Congrats to the closer!*\n*Closer:* {{closer}}\n*Property:* {{address}}\n*Source:* {{source}}\n*FUB Link:* <{{fub_link}}|Open in FUB>",
+                "blocks": "{\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*:tada: Congrats to the closer!*\"}},{\"type\":\"section\",\"fields\":[{\"type\":\"mrkdwn\",\"text\":\"*Closer:*\\n{{closer}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Property:*\\n{{address}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Source:*\\n{{source}}\"}]},{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*FUB Link:* <{{fub_link}}|Open in FUB>\"}}]}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 1320
+                }
+              },
+              "filter": {
+                "name": "Closed",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{stage}}",
+                      "o": "text:equal:ci",
+                      "b": "Closed"
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 12,
+              "module": "slack:CreateMessage",
+              "version": 1,
+              "parameters": {
+                "__IMTCONN__": "REPLACE_SLACK_CONNECTION"
+              },
+              "mapper": {
+                "channel": "C0PORTFOL07",
+                "text": ":warning: Lead moved to *{{stage}}* with no closer assigned\n*Seller Name:* {{seller_name}}\n*FUB Link:* <{{fub_link}}|Open in FUB>",
+                "blocks": "{\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\":warning: *Lead moved to {{stage}} with no closer assigned*\"}},{\"type\":\"section\",\"fields\":[{\"type\":\"mrkdwn\",\"text\":\"*Seller Name:*\\n{{seller_name}}\"},{\"type\":\"mrkdwn\",\"text\":\"*FUB Link:*\\n<{{fub_link}}|Open in FUB>\"}]}]}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 1440
+                }
+              },
+              "filter": {
+                "name": "Fallback — no closer / unmatched",
+                "conditions": []
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "zone": "us1.make.com",
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "sequential": false,
+      "dlq": true
+    },
+    "designer": {
+      "orphans": []
+    },
+    "notes": "DRAFT scaffold. Add a second scenario (Watch new contact, filter Stage=Lead) for Route 1. Confirm module slugs + operator codes by exporting a real scenario."
+  }
+}

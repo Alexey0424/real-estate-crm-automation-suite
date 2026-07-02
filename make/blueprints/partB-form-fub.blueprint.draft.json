@@ -1,0 +1,138 @@
+{
+  "name": "AHB — Part B: Cold-lead form → FUB (DRAFT)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "google-sheets:watchRows",
+      "version": 1,
+      "parameters": {
+        "__IMTCONN__": "REPLACE_GOOGLE_CONNECTION",
+        "spreadsheetId": "REPLACE_SHEET_ID",
+        "sheetId": "Form Responses 1",
+        "includesHeaders": true,
+        "limit": 25
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "follow-up-boss:searchContacts",
+      "version": 1,
+      "parameters": {
+        "__IMTCONN__": "REPLACE_FUB_CONNECTION"
+      },
+      "mapper": {
+        "phone": "{{normalized_phone_e164}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "builtin:BasicRouter",
+      "version": 1,
+      "mapper": null,
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0
+        }
+      },
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 4,
+              "module": "follow-up-boss:createNote",
+              "version": 1,
+              "parameters": {
+                "__IMTCONN__": "REPLACE_FUB_CONNECTION"
+              },
+              "filter": {
+                "name": "Exists (dup) — add note only",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{search.total}}",
+                      "o": "number:greater",
+                      "b": "0"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "contactId": "{{matched_contact_id}}",
+                "body": "{{cold_lead_note}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 900,
+                  "y": -120
+                }
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 5,
+              "module": "follow-up-boss:createContact",
+              "version": 1,
+              "parameters": {
+                "__IMTCONN__": "REPLACE_FUB_CONNECTION"
+              },
+              "filter": {
+                "name": "Fallback — new contact",
+                "conditions": []
+              },
+              "mapper": {
+                "stage": "Lead",
+                "source": "{{source_campaign}}",
+                "tags": [
+                  "Cold Lead - SMS"
+                ],
+                "firstName": "{{first_name}}",
+                "lastName": "{{last_name}}",
+                "emails[].value": "{{email}}",
+                "phones[].value": "{{normalized_phone_e164}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 900,
+                  "y": 120
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "zone": "us1.make.com",
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "sequential": false,
+      "dlq": true
+    },
+    "designer": {
+      "orphans": []
+    },
+    "notes": "DRAFT. Add phone-normalize (Set variable) before search; add Create-note after Create-contact; stage/tag are constants. No Slack here — Part A Route 1 fires on the created contact."
+  }
+}
