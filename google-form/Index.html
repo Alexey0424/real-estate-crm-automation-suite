@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>New Lead Intake | Acme Home Buyers</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#15201A; --paper:#F3EFE6; --card:#FFFFFF; --line:#DED7C7;
+    --moss:#2F5D44; --gold:#C08A2D; --gold-l:#F0E4CB;
+    --muted:#6C7269; --err:#B3362B;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',sans-serif;background:var(--paper);color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:560px;margin:0 auto;padding:0 20px 60px}
+  header{background:var(--moss);color:#fff;padding:34px 0 28px;border-bottom:5px solid var(--gold)}
+  .hwrap{max-width:560px;margin:0 auto;padding:0 20px}
+  .brand{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold-l);font-weight:600;margin-bottom:10px}
+  h1{font-family:'Fraunces',serif;font-weight:800;font-size:30px;line-height:1.08}
+  .sub{margin-top:10px;color:#D8E4DC;font-size:14px}
+  form{background:var(--card);border:1px solid var(--line);border-radius:16px;margin-top:-18px;padding:26px 24px;box-shadow:0 12px 40px -18px rgba(35,71,52,.4)}
+  label{display:block;font-size:13.5px;font-weight:600;margin:0 0 6px}
+  label .req{color:var(--err)}
+  .row{margin-bottom:16px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  input,select,textarea{width:100%;font-family:'Inter';font-size:15px;padding:12px 13px;border:1.5px solid var(--line);border-radius:9px;background:#FCFBF7;color:var(--ink);transition:border-color .15s,box-shadow .15s}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--moss);box-shadow:0 0 0 3px rgba(47,93,68,.13)}
+  textarea{resize:vertical;min-height:90px}
+  input.bad,select.bad,textarea.bad{border-color:var(--err);box-shadow:0 0 0 3px rgba(179,54,43,.1)}
+  .hint{font-size:12px;color:var(--muted);margin-top:5px}
+  .err-msg{font-size:12px;color:var(--err);margin-top:5px;display:none}
+  .err-msg.show{display:block}
+  button{width:100%;margin-top:22px;background:var(--gold);color:#fff;font-family:'Inter';font-weight:600;font-size:16px;border:none;border-radius:10px;padding:15px;cursor:pointer;transition:background .15s,transform .1s}
+  button:hover{background:#a9781f}
+  button:active{transform:translateY(1px)}
+  button:disabled{opacity:.6;cursor:not-allowed}
+  .fineprint{margin-top:12px;font-size:12px;color:var(--muted);text-align:center}
+  .success{display:none;text-align:center;padding:30px 10px}
+  .success.show{display:block}
+  .success .check{width:58px;height:58px;border-radius:50%;background:var(--moss);color:#fff;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 16px}
+  .success h2{font-family:'Fraunces',serif;font-size:24px;margin-bottom:8px}
+  .success p{color:var(--muted)}
+  @media(max-width:480px){.two{grid-template-columns:1fr}h1{font-size:25px}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hwrap">
+    <div class="brand">Acme Home Buyers</div>
+    <h1>New Lead Intake</h1>
+    <div class="sub">Log a new lead. Fields with * are required.</div>
+  </div>
+</header>
+
+<div class="wrap">
+  <form id="leadForm" novalidate>
+
+    <div class="two">
+      <div class="row">
+        <label>First name <span class="req">*</span></label>
+        <input type="text" name="firstName" required>
+        <div class="err-msg">Required</div>
+      </div>
+      <div class="row">
+        <label>Last name</label>
+        <input type="text" name="lastName">
+      </div>
+    </div>
+
+    <div class="row">
+      <label>Cell phone <span class="req">*</span></label>
+      <input type="tel" name="phone" required placeholder="(555) 123-4567">
+      <div class="err-msg">Enter a valid phone number</div>
+    </div>
+
+    <div class="row">
+      <label>Email</label>
+      <input type="email" name="email" placeholder="optional">
+      <div class="err-msg">Enter a valid email</div>
+    </div>
+
+    <div class="row">
+      <label>Property address <span class="req">*</span></label>
+      <input type="text" name="propertyAddress" required placeholder="Paste the full address from Google Maps">
+      <div class="hint">Paste the full address from Google Maps</div>
+      <div class="err-msg">Required</div>
+    </div>
+
+    <div class="row">
+      <label>Lead source <span class="req">*</span></label>
+      <select name="leadSource" required>
+        <option value="">Select</option>
+        <option>Seller Outreach</option>
+        <option>Agent Outreach</option>
+      </select>
+      <div class="err-msg">Required</div>
+    </div>
+
+    <div class="row">
+      <label>Notes <span class="req">*</span></label>
+      <textarea name="notes" required placeholder="What did they say? Motivation, condition, timeline, asking price, anything relevant..."></textarea>
+      <div class="err-msg">Required</div>
+    </div>
+
+    <button type="submit" id="submitBtn">Submit Lead</button>
+    <div class="fineprint">Goes straight into Follow Up Boss as a new lead.</div>
+  </form>
+
+  <div class="success" id="successMsg">
+    <div class="check">&#10003;</div>
+    <h2>Lead submitted</h2>
+    <p>It's in Follow Up Boss. You can log the next one.</p>
+  </div>
+</div>
+
+<script>
+  // This page is SERVED by the Apps Script web app, so it submits straight to the
+  // server function submitLead() via google.script.run — no endpoint URL, no CORS.
+  // Stage, tag, and the round-robin Lead Manager are all assigned server-side.
+  var form = document.getElementById('leadForm');
+  var btn = document.getElementById('submitBtn');
+
+  function showErr(input, on){
+    var row = input.closest('.row') || input.parentElement;
+    var msg = row ? row.querySelector('.err-msg') : null;
+    input.classList.toggle('bad', on);
+    if(msg) msg.classList.toggle('show', on);
+  }
+  function validPhone(v){ return v.replace(/\D/g,'').length >= 10; }
+  function validEmail(v){ return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v); }
+
+  function onSuccess(){
+    form.style.display='none';
+    document.getElementById('successMsg').classList.add('show');
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+  function onFailure(){
+    btn.disabled=false; btn.textContent='Submit Lead';
+    alert('Something went wrong. Try again.');
+  }
+
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    var ok = true;
+    form.querySelectorAll('[required]').forEach(function(inp){
+      var bad = !inp.value.trim();
+      if(inp.name==='phone' && inp.value.trim() && !validPhone(inp.value)) bad = true;
+      showErr(inp, bad);
+      if(bad) ok = false;
+    });
+    var em = form.email;
+    if(em.value.trim() && !validEmail(em.value)){ showErr(em,true); ok=false; }
+    if(!ok){ form.querySelector('.bad').focus(); return; }
+
+    btn.disabled = true; btn.textContent = 'Submitting...';
+    var data = {};
+    new FormData(form).forEach(function(v,k){ data[k] = v; });
+
+    google.script.run
+      .withSuccessHandler(onSuccess)
+      .withFailureHandler(onFailure)
+      .submitLead(data);
+  });
+
+  form.querySelectorAll('input,select,textarea').forEach(function(inp){
+    inp.addEventListener('input', function(){ showErr(inp,false); });
+  });
+</script>
+</body>
+</html>
