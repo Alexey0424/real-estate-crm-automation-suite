@@ -1,0 +1,14 @@
+{
+  "name": "real-estate-crm-automation-suite",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Event-driven CRM automation suite: Follow Up Boss to Slack notifications, cold-lead form intake, and JustCall call mirroring, built on Make.com and n8n",
+  "scripts": {
+    "test": "node shared/lib/test.js",
+    "build:n8n": "node n8n/build-workflows.js",
+    "build:make": "node make/build-blueprints.js",
+    "render:slack": "node shared/slack-messages/render_examples.js",
+    "build": "npm run build:n8n && npm run build:make && npm run render:slack"
+  },
+  "license": "UNLICENSED"
+}
