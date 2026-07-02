@@ -1,5 +1,14 @@
 # Real Estate CRM Automation Suite
 
+![Make.com](https://img.shields.io/badge/Make.com-API--authored_scenarios-6D00CC)
+![n8n](https://img.shields.io/badge/n8n-EA4B71?logo=n8n&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-339933?logo=nodedotjs&logoColor=white)
+![Slack Block Kit](https://img.shields.io/badge/Slack_Block_Kit-4A154B?logo=slack&logoColor=white)
+![Google Apps Script](https://img.shields.io/badge/Google_Apps_Script-4285F4?logo=googleappsscript&logoColor=white)
+![Webhooks](https://img.shields.io/badge/Webhooks-event--driven-555555)
+![Tests](https://img.shields.io/badge/tests-26_passing-brightgreen)
+
 Production integration suite built for a US real estate wholesaling company. It connects the company's CRM (Follow Up Boss), its phone system (JustCall), Slack, and a Google Forms lead intake channel into one event-driven system that the sales team runs their day on.
 
 Everything here ran in production. Client identifiers, credentials, live webhook URLs, channel IDs, and staff names have been replaced with fictional equivalents so the engineering can be shown publicly. The logic, the architecture, and the tooling are the real thing.
