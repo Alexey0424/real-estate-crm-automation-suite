@@ -1,0 +1,35 @@
+# Local / self-hosted n8n for the AHB automations.
+#   docker compose up -d         → http://localhost:5678
+# The workflows in ./workflows are NOT auto-imported — import them once (see
+# n8n/README.md) or via:  docker compose exec n8n n8n import:workflow --separate --input=/workflows
+#
+# IMPORTANT for Part A: FUB must reach the webhook over PUBLIC HTTPS. On a laptop
+# behind NAT, put a tunnel/reverse proxy in front and set WEBHOOK_URL to its URL
+# (e.g. a Cloudflare Tunnel / ngrok domain). Without that, FUB can't deliver.
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: ahb-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      # Public base URL n8n registers for webhooks. Set to your tunnel URL in prod.
+      - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
+      - GENERIC_TIMEZONE=America/New_York
+      - TZ=America/New_York
+      # Stable key — REQUIRED so stored credentials stay decryptable across restarts.
+      # Generate once:  openssl rand -hex 24   then put it in n8n/.env (gitignored).
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:?set N8N_ENCRYPTION_KEY in n8n/.env}
+      - N8N_RUNNERS_ENABLED=true
+      # Allow http login on a non-localhost host (set true only if not using HTTPS):
+      - N8N_SECURE_COOKIE=${N8N_SECURE_COOKIE:-true}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./workflows:/workflows:ro
+
+volumes:
+  n8n_data:

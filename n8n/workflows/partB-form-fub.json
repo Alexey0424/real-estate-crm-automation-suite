@@ -1,0 +1,434 @@
+{
+  "id": "ahbColdLeadFormPartB",
+  "name": "AHB — Part B: Cold-lead form → FUB",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 📝 PART B — Cold-lead form → Follow Up Boss\nThe SMS agency submits leads via a **Google Form → linked Sheet**. Each new row creates (or updates) a FUB person at stage **Lead**, tagged **Cold Lead - SMS**, deduped by phone/email.\n\nNo Slack here — the created person triggers **Part A’s Route 1** notification.",
+        "height": 120,
+        "width": 1800,
+        "color": 7
+      },
+      "id": "node-0011-0000-4000-8000-000000000000",
+      "name": "doc-overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        200,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### ① Intake & normalize\n**Form Responses Trigger** — polls the linked Google Sheet (“Form Responses 1”) for new rows.\n\n**Normalize form row** (Code) — splits name, normalizes phone to **E.164**, maps Market/State → `customMarketState`, hardcodes stage **Lead** + tag **Cold Lead - SMS**, and builds the note body.",
+        "height": 380,
+        "width": 440,
+        "color": 5
+      },
+      "id": "node-0012-0000-4000-8000-000000000000",
+      "name": "doc-1-intake",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        200,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### ② Dedupe lookup (no duplicates)\n**Search by phone** — FUB `/people?phone=` (E.164, exact match).\n\n**Search by email** — FUB `/people?email=` (uses a sentinel when email is blank so it can’t false-match).\n\n**Decide match** (Code) — picks the matched person id (phone first, then email), or empty if none.",
+        "height": 380,
+        "width": 640,
+        "color": 6
+      },
+      "id": "node-0013-0000-4000-8000-000000000000",
+      "name": "doc-2-dedupe",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        660,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### ③ Create or update + note\n**Existing?** (IF) — is there a matched person id?\n\n• **Yes →** **Note (existing)**: adds the cold-lead note to the existing record (no duplicate created).\n\n• **No →** **Create FUB person** (stage Lead, source = campaign, tag Cold Lead - SMS, Market/State), then **Note (new)** adds the note.",
+        "height": 380,
+        "width": 680,
+        "color": 4
+      },
+      "id": "node-0014-0000-4000-8000-000000000000",
+      "name": "doc-3-write",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1320,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Form Responses 1"
+        },
+        "event": "rowAdded",
+        "options": {}
+      },
+      "id": "node-0001-0000-4000-8000-000000000000",
+      "name": "Form Responses Trigger",
+      "type": "n8n-nodes-base.googleSheetsTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "credentials": {
+        "googleSheetsTriggerOAuth2Api": {
+          "id": "REPLACE_SHEETS",
+          "name": "Google Sheets (AHB)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "/**\n * config.js — SINGLE SOURCE OF TRUTH for the AHB FUB → Slack notification system.\n *\n * Both implementations (n8n and Make.com) are built FROM this file so they can\n * never drift apart. The tested logic in routing.js / phone.js / format.js\n * consumes these tables. The n8n Code nodes embed copies of the tested functions;\n * the Make build mirrors the same tables in its modules.\n *\n * Anything marked `CONFIRM:` is a reconciliation decision we made to unblock the\n * build — it MUST be verified with Marco / against the live FUB account before\n * acceptance. See docs/architecture.md §\"Ambiguities\".\n */\n\n// ── FUB account-specific values Alexey must fill once (run shared/fub-scripts) ──\nconst FUB = {\n  // GET /v1/people/view link base. UNVERIFIED in FUB docs — confirm by opening a\n  // real record in the browser and copying the URL. (Research flagged this.)\n  PERSON_URL_BASE: 'https://app.followupboss.com/2/people/view/', // + personId\n\n  // The \"Lead Manager\" custom field. CONFIRMED 2026-06-14 via GET /v1/customFields\n  // (label \"Lead Manager\", type dropdown).\n  LEAD_MANAGER_FIELD: 'customLeadManager',\n\n  // Market/State custom field (dropdown) — CONFIRMED present. Part B can write\n  // the form's Market/State here (values must match the dropdown's options).\n  MARKET_STATE_FIELD: 'customMarketState',\n\n  API_BASE: 'https://api.followupboss.com/v1',\n};\n\n// ── Slack channel registry (STAGING + PROD) ─────────────────────────────────\n// Two environments because the team already created `staging-*` channels for\n// testing (confirmed live 2026-06-14). Test against STAGING, then flip\n// CHANNEL_ENV to 'prod' at cutover. Post by immutable ID (names rename → silent\n// breakage); staging IDs are real (fetched), prod IDs are filled as channels are\n// created / the bot is invited.  `''` id → the Slack node posts by name instead.\nconst CHANNEL_ENV = 'staging'; // 'staging' | 'prod'  ← flip to 'prod' for go-live\n\n// Prod IDs fetched live 2026-06-14 after the bot was invited (most are PRIVATE).\nconst CHANNELS = {\n  newLeads:     { prod: { name: 'all-ahb-new-leads',  id: 'C0PORTFOL01' },   staging: { name: 'staging-ahb-new-leads',     id: 'C0PORTFOL11' } },\n  underwriter:  { prod: { name: 'underwriter-to-dos', id: 'C0PORTFOL02' },   staging: { name: 'staging-underwriter-to-dos', id: 'C0PORTFOL12' } },\n  closersChat:  { prod: { name: 'closers-chat',       id: 'C0PORTFOL03' },   staging: { name: 'staging-closers-chat',       id: 'C0PORTFOL13' } },\n  tc:         { prod: { name: 'tc-to-dos',         id: 'C0PORTFOL04' },   staging: { name: 'staging-tc-to-dos',        id: 'C0PORTFOL14' } },\n  dispo:        { prod: { name: 'dispo-external-chat', id: 'C0PORTFOL05' },   staging: { name: 'staging-internal-dispo-chat', id: 'C0PORTFOL15' } }, // prod = dispo-EXTERNAL (SOW template was right)\n  teamWins:     { prod: { name: 'team-wins',           id: 'C0PORTFOL06' },   staging: { name: 'team-wins',                  id: 'C0PORTFOL06' } }, // no staging variant\n  leadManagers: { prod: { name: 'lead-managers',       id: 'C0PORTFOL07' },   staging: { name: '',                          id: '' } },\n  closerReyes:    { prod: { name: 'closer-deals-reyes',    id: 'C0PORTFOL08' },   staging: { name: '',                          id: '' } },\n  closerFlora:   { prod: { name: 'closer-deals-flora',   id: 'C0PORTFOL09' },   staging: { name: '',                          id: '' } },\n  closerMarco:   { prod: { name: 'closer-deals-marco',   id: 'C0PORTFOL10' },   staging: { name: '',                          id: '' } },\n  // (closer-deals-nick removed 2026-06-14 — Ned no longer with the team)\n};\n\n// Resolve a channel for the active env; fall back to prod if no staging variant.\nfunction chan(key) {\n  const c = CHANNELS[key];\n  if (!c) return { name: key, id: '' };\n  const e = c[CHANNEL_ENV] || {};\n  if (e.name) return e;\n  return c.prod || { name: key, id: '' };\n}\n\n// ── Closer routing: match on the FUB `assignedTo` display name (case-insensitive\n//    \"contains\"). Order matters only if names overlap (they don't here). ────────\nconst CLOSER_ROUTING = [\n  { contains: 'reyes',  channelKey: 'closerReyes'  },\n  { contains: 'flora', channelKey: 'closerFlora' },\n  { contains: 'marco', channelKey: 'closerMarco' },\n];\n// If assignedTo is set but matches none of the above → ADDED SAFETY (not in SOW):\n// route to leadManagers with an \"unmapped closer\" note instead of dropping it.\nconst CLOSER_FALLBACK_CHANNEL = 'leadManagers';\n\n// ── Stage routes. `key` is an internal id; `stage` is the EXACT FUB stage string\n//    (CONFIRM every one against GET /v1/stages — filters must match exactly). ───\n// trigger: 'created'  → fires on contact-created webhook (peopleCreated)\n//          'stage'    → fires on stage-changed webhook (peopleStageUpdated)\n// channel: a CHANNELS key, OR 'BY_CLOSER' to route via CLOSER_ROUTING.\nconst ROUTES = [\n  {\n    key: 'route1_new_lead',\n    trigger: 'created',\n    stage: 'Lead',\n    channel: 'newLeads',\n    template: 'newLead',\n    requiresCloser: false,\n  },\n  {\n    key: 'route2_pending_closer',\n    trigger: 'stage',\n    stage: 'Pending Closer Contact',\n    channel: 'BY_CLOSER',\n    template: 'prequalified',\n    requiresCloser: true, // missing assignedTo → catch-all warning\n  },\n  {\n    key: 'route3_needs_uw',\n    trigger: 'stage',\n    stage: 'Needs Underwriting',\n    channel: 'underwriter',\n    template: 'underwritingRequest',\n    requiresCloser: false,\n  },\n  {\n    key: 'route4_make_offer',\n    trigger: 'stage',\n    // CONFIRM: routes table calls the STAGE \"Closer Needs To Make Offer\"; the\n    // message template titles it \"OFFER PROVIDED BY UW!\". We treat the table as\n    // the trigger stage and the template title as the heading. Verify the real\n    // stage name + intent with Marco.\n    stage: 'Closer Needs To Make Offer',\n    channel: 'BY_CLOSER',\n    template: 'offerProvidedByUw',\n    requiresCloser: true,\n  },\n  {\n    key: 'route5_offer_made_submitted',\n    trigger: 'stage',\n    stage: 'Offer Submitted - Waiting to Hear Back', // CONFIRMED stage id=41\n    channel: 'closersChat',\n    template: 'offerMade',\n    requiresCloser: false,\n  },\n  // 2026-06-16: Marco CONFIRMED \"Offer Rejected - Future Follow Up\" (id=40) should\n  // ALSO notify #closers-chat (distinct \"OFFER REJECTED\" message). Moved out of\n  // NO_NOTIFY_STAGES; this is the second Route-5 stage.\n  {\n    key: 'route5b_offer_rejected',\n    trigger: 'stage',\n    stage: 'Offer Rejected - Future Follow Up',\n    channel: 'closersChat',\n    template: 'offerRejected',\n    requiresCloser: false,\n  },\n  {\n    key: 'route6_needs_contract',\n    trigger: 'stage',\n    stage: 'Needs Contract (Automatically Requested To TC)',\n    channel: 'tc',\n    template: 'contractRequest',\n    requiresCloser: false,\n  },\n  {\n    key: 'route7_contract_sent',\n    trigger: 'stage',\n    stage: 'Contract Sent',\n    // 2026-06-16: Marco CONFIRMED → #closers-chat (was tc-to-dos in the SOW table).\n    channel: 'closersChat',\n    template: 'contractSent',\n    requiresCloser: false,\n  },\n  {\n    key: 'route8_under_contract',\n    trigger: 'stage',\n    stage: 'Under Contract',\n    channel: 'dispo',\n    template: 'underContract',\n    requiresCloser: false,\n  },\n  {\n    key: 'route9_closed',\n    trigger: 'stage',\n    stage: 'Closed',\n    channel: 'teamWins',\n    template: 'closed',\n    requiresCloser: false,\n  },\n];\n\n// Stages that EXPLICITLY get no notification (fall through silently by design).\nconst NO_NOTIFY_STAGES = [\n  'No Contact Made',\n  'Cold - Follow Up',\n  // 'Offer Rejected - Future Follow Up' — MOVED to a notifying route (Marco 2026-06-16).\n  'Hot Leads',\n  'Dead (Previous Deal)',\n  'Dead/Already Sold',\n  'Other Contacts',\n  'Title Companies',\n  'Lawyers',\n  'Buyers List',\n  'Buyers List (Real Estate Broker)',\n  'Trash',\n];\n\n// ── Part B (cold-lead intake form) constants ────────────────────────────────\nconst INTAKE = {\n  HARDCODED_STAGE: 'Lead',          // set in the automation, never on the form\n  HARDCODED_TAG: 'Cold Lead - SMS', // tag every form lead so managers can spot it\n  // Dropdown values for the form (edit to the agency's real campaigns / roster).\n  MARKETS: ['PA', 'NJ', 'IN', 'TN', 'NC', 'Other'],\n  PROPERTY_TYPES: ['SFH', 'Condo', 'Multi', 'Land', 'Other'],\n  // Placeholders — REPLACE with the agency's real campaign + agent names:\n  CAMPAIGNS: ['Spring Absentee PA', 'Probate NJ Q2', 'High-Equity IN', 'Tired Landlord TN', 'Pre-Foreclosure NC'],\n  SMS_AGENTS: ['Agent A', 'Agent B', 'Agent C'],\n};\n\n// Export for Node (tests) and ignore in n8n (n8n Code nodes embed copies).\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = {\n    FUB, CHANNELS, CHANNEL_ENV, chan, CLOSER_ROUTING, CLOSER_FALLBACK_CHANNEL,\n    ROUTES, NO_NOTIFY_STAGES, INTAKE,\n  };\n}\n\n\n// ----------------------------------------\n\n/**\n * phone.js — normalize a free-text US phone into E.164 (+1XXXXXXXXXX).\n *\n * Why: FUB phone/email search is EXACT-match with no documented normalization\n * (research gotcha). If the form gives \"(215) 555 1234\" and FUB stores\n * \"+12155551234\", a naive search misses the dupe and creates a second record.\n * Canonicalize on BOTH the write and the search so dedupe actually works.\n */\n\nfunction normalizeToE164(raw) {\n  if (raw == null) return { e164: null, valid: false, reason: 'empty' };\n  const hadPlus = String(raw).trim().startsWith('+');\n  const digits = String(raw).replace(/\\D/g, '');\n\n  if (digits.length === 10) {\n    return { e164: '+1' + digits, valid: true };\n  }\n  if (digits.length === 11 && digits.startsWith('1')) {\n    return { e164: '+' + digits, valid: true };\n  }\n  // Already international (kept +) or longer than NANP — best-effort passthrough.\n  if (hadPlus && digits.length >= 11 && digits.length <= 15) {\n    return { e164: '+' + digits, valid: true };\n  }\n  return { e164: null, valid: false, reason: `unexpected length ${digits.length}` };\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = { normalizeToE164 };\n}\n\n\n// ----------------------------------------\n\n/**\n * fields.js — pull the notification fields out of a raw FUB person record\n * (the object returned by GET /v1/people/{id}?fields=allFields).\n *\n * Reflects the REAL FUB schema confirmed in research:\n *  - names: firstName / lastName (or `name`)\n *  - addresses: ARRAY of { street, city, state, code(=ZIP), ... }  (NOT flat)\n *  - source: string (immutable after create)\n *  - assignedTo: display name string\n *  - custom fields: top-level `custom<CamelLabel>` key, only present with ?fields=allFields\n */\n\n\nfunction fullName(p) {\n  if (p && p.name && String(p.name).trim()) return String(p.name).trim();\n  const fn = (p && p.firstName) || '';\n  const ln = (p && p.lastName) || '';\n  return `${fn} ${ln}`.trim();\n}\n\nfunction primaryAddress(p) {\n  const arr = (p && Array.isArray(p.addresses)) ? p.addresses : [];\n  const a = arr[0];\n  if (!a) return '';\n  const line = [a.street, a.city, a.state].filter(Boolean).join(', ');\n  return [line, a.code].filter(Boolean).join(' ').trim();\n}\n\nfunction fubLink(p) {\n  const id = p && (p.id != null ? p.id : '');\n  return id === '' ? '' : `${FUB.PERSON_URL_BASE}${id}`;\n}\n\n/** Build the field bag the message templates consume. */\nfunction extractFields(p) {\n  return {\n    sellerName: fullName(p),\n    address: primaryAddress(p),\n    source: (p && p.source) || '',\n    closer: (p && p.assignedTo) || '',\n    leadManager: (p && p[FUB.LEAD_MANAGER_FIELD]) || '',\n    fubLink: fubLink(p),\n    stage: (p && p.stage) || '',\n    personId: (p && p.id) || '',\n  };\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = { extractFields, fullName, primaryAddress, fubLink };\n}\n\n\n// ----------------------------------------\n\n/**\n * format.js — build the Slack message (mrkdwn text + Block Kit blocks) for each\n * route, verbatim from the SOW §5 templates.\n *\n * Slack formatting rules baked in (research gotchas):\n *  - bold is *single* asterisks (NOT **double**)\n *  - links are <url|text> (NOT [text](url))\n *  - always set a plain-text `text` fallback even when using blocks\n */\n\n// Template registry: heading + ordered [label, fieldKey] rows.\n// fieldKey maps into the bag from fields.extractFields().\nconst TEMPLATES = {\n  newLead: {\n    heading: 'New Seller Lead :rocket:',\n    rows: [\n      ['Marketing Campaign', 'source'],\n      ['Seller Name', 'sellerName'],\n      ['Address', 'address'],\n      ['Lead Manager', 'leadManager'],\n    ],\n  },\n  prequalified: {\n    heading: ':telephone_receiver: PREQUALIFIED LEAD ASSIGNED TO YOU',\n    rows: [\n      ['Seller Name', 'sellerName'],\n      ['Address', 'address'],\n      ['Source', 'source'],\n      ['Lead Manager', 'leadManager'],\n    ],\n  },\n  underwritingRequest: {\n    heading: 'UNDERWRITING REQUEST',\n    rows: [\n      ['Seller Name', 'sellerName'],\n      ['Closer', 'closer'],\n      ['Address', 'address'],\n      ['Source', 'source'],\n    ],\n  },\n  offerProvidedByUw: {\n    heading: 'OFFER PROVIDED BY UW!',\n    rows: [\n      ['Seller Name', 'sellerName'],\n      ['Closer', 'closer'],\n      ['Address', 'address'],\n      ['Source', 'source'],\n    ],\n  },\n  offerMade: {\n    heading: ':envelope_with_arrow: OFFER MADE',\n    rows: [\n      ['Closer', 'closer'],\n      ['Seller Name', 'sellerName'],\n      ['Address', 'address'],\n    ],\n  },\n  offerRejected: {\n    heading: 'OFFER REJECTED',\n    rows: [\n      ['Closer', 'closer'],\n      ['Seller Name', 'sellerName'],\n      ['Address', 'address'],\n    ],\n  },\n  contractRequest: {\n    heading: ':memo: CONTRACT REQUEST',\n    rows: [\n      ['Seller Name', 'sellerName'],\n      ['Closer', 'closer'],\n      ['Address', 'address'],\n    ],\n  },\n  contractSent: {\n    heading: ':white_check_mark: CONTRACT SENT',\n    rows: [\n      ['Seller Name', 'sellerName'],\n      ['Closer', 'closer'],\n      ['Address', 'address'],\n    ],\n  },\n  underContract: {\n    heading: 'NEW DEAL UNDER CONTRACT!',\n    rows: [\n      ['Seller Name', 'sellerName'],\n      ['Closer', 'closer'],\n      ['Address', 'address'],\n      ['Source', 'source'],\n    ],\n  },\n  closed: {\n    heading: ':tada: Congrats to the closer!',\n    rows: [\n      ['Closer', 'closer'],\n      ['Property', 'address'],\n      ['Source', 'source'],\n    ],\n  },\n};\n\nconst FUB_LINK_LABEL = 'Open in FUB';\n\nfunction fubLinkMrkdwn(url) {\n  return url ? `<${url}|${FUB_LINK_LABEL}>` : '_(no FUB link)_';\n}\n\n/** The catch-all warning for a closer-routed stage with no Assigned To. */\nfunction buildCatchall(stage, fields) {\n  const text =\n    `:warning: Lead moved to *${stage}* with no closer assigned\\n` +\n    `*Seller Name:* ${fields.sellerName || '—'}\\n` +\n    `*FUB Link:* ${fubLinkMrkdwn(fields.fubLink)}`;\n  const blocks = [\n    { type: 'section', text: { type: 'mrkdwn', text: `:warning: *Lead moved to ${stage} with no closer assigned*` } },\n    { type: 'section', fields: [\n      { type: 'mrkdwn', text: `*Seller Name:*\\n${fields.sellerName || '—'}` },\n      { type: 'mrkdwn', text: `*FUB Link:*\\n${fubLinkMrkdwn(fields.fubLink)}` },\n    ] },\n  ];\n  return { text, blocks };\n}\n\n/** Build a normal route message. templateKey ∈ keys of TEMPLATES. */\nfunction buildMessage(templateKey, fields) {\n  if (templateKey === 'catchall') return buildCatchall(fields.stage, fields);\n  const tpl = TEMPLATES[templateKey];\n  if (!tpl) throw new Error(`unknown template \"${templateKey}\"`);\n\n  // mrkdwn text (fallback + simple clients)\n  const lines = [`*${tpl.heading}*`];\n  for (const [label, key] of tpl.rows) lines.push(`*${label}:* ${fields[key] || '—'}`);\n  lines.push(`*FUB Link:* ${fubLinkMrkdwn(fields.fubLink)}`);\n  const text = lines.join('\\n');\n\n  // Block Kit: heading section + two-column fields + link section\n  const fieldBlocks = tpl.rows.map(([label, key]) => ({\n    type: 'mrkdwn',\n    text: `*${label}:*\\n${fields[key] || '—'}`,\n  }));\n  const blocks = [\n    { type: 'section', text: { type: 'mrkdwn', text: `*${tpl.heading}*` } },\n    { type: 'section', fields: fieldBlocks },\n    { type: 'section', text: { type: 'mrkdwn', text: `*FUB Link:* ${fubLinkMrkdwn(fields.fubLink)}` } },\n  ];\n  return { text, blocks };\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = { buildMessage, buildCatchall, TEMPLATES };\n}\n\n\n// ----------------------------------------\n\n/**\n * routing.js — decide where (if anywhere) a FUB event should notify.\n *\n * Pure, testable. The n8n Switch/Code nodes and the Make Router filters both\n * mirror this logic. Input is the normalized event; output is a decision the\n * caller turns into a Slack post.\n */\n\n\nconst norm = (s) => String(s == null ? '' : s).trim();\nconst lc = (s) => norm(s).toLowerCase();\n\n/** Resolve a closer's channel from the FUB assignedTo display name. */\nfunction resolveCloserChannel(assignedTo) {\n  const a = lc(assignedTo);\n  if (!a) return { channelKey: null, isFallback: false, missing: true };\n  for (const r of CLOSER_ROUTING) {\n    if (a.includes(r.contains)) return { channelKey: r.channelKey, isFallback: false, missing: false };\n  }\n  // assignedTo is set but matches no known closer → safety net, never drop it.\n  return { channelKey: CLOSER_FALLBACK_CHANNEL, isFallback: true, missing: false };\n}\n\nfunction isNoNotify(stage) {\n  const s = lc(stage);\n  return NO_NOTIFY_STAGES.some((x) => lc(x) === s);\n}\n\nfunction findRoute(triggerType, stage) {\n  const s = lc(stage);\n  return ROUTES.find((r) => r.trigger === triggerType && lc(r.stage) === s) || null;\n}\n\n/**\n * decide(event) → decision\n *   event = { type: 'created'|'stage', stage, assignedTo }\n *   decision = {\n *     action: 'notify' | 'catchall' | 'skip',\n *     routeKey, template, channelKey, channelName,\n *     warnUnmappedCloser (bool), reason\n *   }\n */\nfunction decide(event) {\n  const type = event && event.type;\n  const stage = norm(event && event.stage);\n  const assignedTo = norm(event && event.assignedTo);\n\n  if (type === 'stage' && isNoNotify(stage)) {\n    return { action: 'skip', reason: `no-notify stage \"${stage}\"` };\n  }\n\n  const route = findRoute(type, stage);\n  if (!route) {\n    return { action: 'skip', reason: `no route for trigger=${type} stage=\"${stage}\" (unknown/future stage falls through by design)` };\n  }\n\n  // Catch-all: closer-routed stage with no Assigned To → warn lead-managers.\n  if (route.requiresCloser && !assignedTo) {\n    return {\n      action: 'catchall',\n      routeKey: route.key,\n      template: 'catchall',\n      channelKey: 'leadManagers',\n      channelName: chan('leadManagers').name,\n      reason: `${route.stage} with no closer assigned`,\n    };\n  }\n\n  let channelKey = route.channel;\n  let warnUnmappedCloser = false;\n  if (route.channel === 'BY_CLOSER') {\n    const c = resolveCloserChannel(assignedTo);\n    channelKey = c.channelKey;\n    warnUnmappedCloser = c.isFallback;\n  }\n\n  return {\n    action: 'notify',\n    routeKey: route.key,\n    template: route.template,\n    channelKey,\n    channelName: chan(channelKey).name,\n    warnUnmappedCloser,\n    reason: 'routed',\n  };\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = { decide, resolveCloserChannel, isNoNotify, findRoute };\n}\n\n\n// ===== n8n entrypoint (Part B — normalize form row) =====\nconst row = $json;                          // Google Sheets Trigger row (keyed by header)\nconst g = (k) => (row[k] == null ? '' : String(row[k])).trim();\nconst name = g('Seller Full Name');\nconst parts = name.split(/\\s+/).filter(Boolean);\nconst firstName = parts.shift() || '';\nconst lastName = parts.join(' ');\nconst ph = normalizeToE164(g('Seller Phone Number'));\nconst email = g('Seller Email Address');\nconst source = g('Lead Source / Campaign');\nconst market = g('Market / State');\nconst address = g('Property Address(es)');\nconst propertyType = g('Property Type');\nconst notes = g('Notes / Motivation / Reason for Selling');\nconst submittedBy = g('Submitted By');\nconst noteBody = [\n  'Cold SMS lead via Google Form',\n  submittedBy ? 'Submitted By: ' + submittedBy : '',\n  market ? 'Market: ' + market : '',\n  propertyType ? 'Property Type: ' + propertyType : '',\n  address ? 'Address(es): ' + address : '',\n  notes ? 'Notes: ' + notes : '',\n].filter(Boolean).join('\\n');\nreturn { json: {\n  firstName: firstName, lastName: lastName, name: name,\n  phone_e164: ph.e164 || '', phone_valid: ph.valid,\n  email: email, source: source, market: market, address: address,\n  propertyType: propertyType, submittedBy: submittedBy, noteBody: noteBody,\n  stage: INTAKE.HARDCODED_STAGE, tag: INTAKE.HARDCODED_TAG,\n} };\n"
+      },
+      "id": "node-0002-0000-4000-8000-000000000000",
+      "name": "Normalize form row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.followupboss.com/v1/people",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "phone",
+              "value": "={{ $json.phone_e164 }}"
+            },
+            {
+              "name": "fields",
+              "value": "allFields"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-0003-0000-4000-8000-000000000000",
+      "name": "Search by phone",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        300
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "REPLACE_FUB_BASIC",
+          "name": "FUB Basic Auth"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 2
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.followupboss.com/v1/people",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "email",
+              "value": "={{ $('Normalize form row').item.json.email || 'no-match-sentinel@example.invalid' }}"
+            },
+            {
+              "name": "fields",
+              "value": "allFields"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-0004-0000-4000-8000-000000000000",
+      "name": "Search by email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        300
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "REPLACE_FUB_BASIC",
+          "name": "FUB Basic Auth"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 2
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "\n// ===== n8n entrypoint (Part B — decide match) =====\nfunction firstId(r) { const a = r && r.people; return (Array.isArray(a) && a.length) ? a[0].id : null; }\nconst byPhone = $('Search by phone').item.json;\nconst byEmail = $('Search by email').item.json;\nconst matchedId = firstId(byPhone) || firstId(byEmail) || '';\nconst data = $('Normalize form row').item.json;\nreturn { json: Object.assign({}, data, { matchedId: matchedId }) };\n"
+      },
+      "id": "node-0005-0000-4000-8000-000000000000",
+      "name": "Decide match",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "node-0006-0000-4000-8000-000000000000",
+              "leftValue": "={{ $json.matchedId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      },
+      "id": "node-0007-0000-4000-8000-000000000000",
+      "name": "Existing?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.followupboss.com/v1/people",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ firstName: $json.firstName, lastName: $json.lastName, stage: $json.stage, source: $json.source, tags: [$json.tag], customMarketState: ($json.market && $json.market !== \"Other\" ? $json.market : undefined), emails: ($json.email ? [{ value: $json.email }] : []), phones: ($json.phone_e164 ? [{ value: $json.phone_e164 }] : []) }) }}",
+        "options": {}
+      },
+      "id": "node-0008-0000-4000-8000-000000000000",
+      "name": "Create FUB person",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1560,
+        400
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "REPLACE_FUB_BASIC",
+          "name": "FUB Basic Auth"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.followupboss.com/v1/notes",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ personId: $json.id, subject: 'Cold SMS Lead', body: $('Decide match').item.json.noteBody }) }}",
+        "options": {}
+      },
+      "id": "node-0009-0000-4000-8000-000000000000",
+      "name": "Note (new)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1780,
+        400
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "REPLACE_FUB_BASIC",
+          "name": "FUB Basic Auth"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.followupboss.com/v1/notes",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ personId: $json.matchedId, subject: 'Cold SMS Lead (dup — updated)', body: $json.noteBody }) }}",
+        "options": {}
+      },
+      "id": "node-0010-0000-4000-8000-000000000000",
+      "name": "Note (existing)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1560,
+        200
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "REPLACE_FUB_BASIC",
+          "name": "FUB Basic Auth"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3
+    }
+  ],
+  "connections": {
+    "Form Responses Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalize form row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize form row": {
+      "main": [
+        [
+          {
+            "node": "Search by phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search by phone": {
+      "main": [
+        [
+          {
+            "node": "Search by email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search by email": {
+      "main": [
+        [
+          {
+            "node": "Decide match",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decide match": {
+      "main": [
+        [
+          {
+            "node": "Existing?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Existing?": {
+      "main": [
+        [
+          {
+            "node": "Note (existing)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create FUB person",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create FUB person": {
+      "main": [
+        [
+          {
+            "node": "Note (new)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "active": false,
+  "pinData": {},
+  "meta": {
+    "templateId": "ahb-fub-slack"
+  }
+}
