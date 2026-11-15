@@ -9,7 +9,7 @@
 ![Webhooks](https://img.shields.io/badge/Webhooks-event--driven-555555)
 ![Tests](https://img.shields.io/badge/tests-26_passing-brightgreen)
 <p align="center">
-  <img src="assets/hero.jpg" alt="A house feeds a glowing automation flow, webhook to router, fanning out into Slack channel mail slots with a catch-all bin so nothing is dropped" width="100%">
+  <img src="assets/hero.gif" alt="A house feeds a glowing automation flow, webhook to router, fanning out into Slack channel mail slots with a catch-all bin so nothing is dropped" width="100%">
 </p>
 
 Production integration suite built for a US real estate wholesaling company. It connects the company's CRM (Follow Up Boss), its phone system (JustCall), Slack, and a Google Forms lead intake channel into one event-driven system that the sales team runs their day on.
